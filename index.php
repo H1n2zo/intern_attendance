@@ -90,12 +90,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($step === 'mfa' && isset($_POST['mfa_code'])) {
         $userId = $_SESSION['mfa_user_id'] ?? null;
-        $inputCode = sanitize($_POST['mfa_code']);
+        $inputCode = trim(sanitize($_POST['mfa_code']));
 
         if ($userId) {
             $pdo = db();
-            $stmt = $pdo->prepare("SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? AND mfa_code = ? AND mfa_expires_at > NOW()");
-            $stmt->execute([$userId, $inputCode]);
+            $current_time = date('Y-m-d H:i:s');
+            $stmt = $pdo->prepare("SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? AND mfa_code = ? AND mfa_expires_at > ?");
+            $stmt->execute([$userId, $inputCode, $current_time]);
             $user = $stmt->fetch();
 
             if ($user) {
