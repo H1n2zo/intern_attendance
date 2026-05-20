@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/settings.php';
+require_once __DIR__ . '/../../mailer/mailer.php';
 
 startSecureSession();
 requireLogin();
@@ -46,7 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $selfiePath = "assets/img/selfies/$userId/$fname";
         }
         $pdo->prepare("INSERT INTO attendance (user_id, time_in, selfie_in, date, status) VALUES (?,NOW(),?,?,?)")->execute([$userId, $selfiePath, $today, 'ongoing']);
-        $msg = 'Time-in recorded successfully.';
+        sendTimeInConfirmation($user);
+        notifyInstructorTimeIn($user);
         header("Location: home.php?msg=in"); exit;
     }
 
@@ -67,6 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE attendance SET time_out=NOW(), selfie_out=?, hours_rendered=?, status='completed' WHERE id=?")->execute([$selfiePath, $hours, $todayRecord['id']]);
         $pdo->prepare("UPDATE users SET completed_hours = completed_hours + ? WHERE id = ?")->execute([$hours, $userId]);
 
+        $user = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+        $user->execute([$userId]);
+        $user = $user->fetch();
+        $todayRecord['hours_rendered'] = $hours;
+        $todayRecord['time_in'] = $todayRecord['time_in'];
+        sendTimeOutConfirmation($user, $todayRecord);
+        notifyInstructorTimeOut($user, $todayRecord);
         header("Location: home.php?msg=out"); exit;
     }
 }

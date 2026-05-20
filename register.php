@@ -2,79 +2,61 @@
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/mailer/mailer.php';
 
 startSecureSession();
 
-// If already logged in, redirect to respective homes
 if (isLoggedIn()) {
     $role = $_SESSION['role'];
-    if ($role === 'Admin' || $role === 'Instructor') {
-        redirect('/pages/admin/dashboard.php');
-    } else {
-        redirect('/pages/intern/home.php');
-    }
+    if ($role === 'Admin' || $role === 'Instructor') redirect('/pages/admin/dashboard.php');
+    else redirect('/pages/intern/home.php');
 }
 
-$error = '';
-$success = '';
+$pdo = db();
+$errors = [];
+$old    = [];
+$success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $student_id = sanitize($_POST['student_id'] ?? '');
     $first_name = sanitize($_POST['first_name'] ?? '');
-    $last_name  = sanitize($_POST['last_name'] ?? '');
-    $email      = sanitize($_POST['email'] ?? '');
-    $company    = sanitize($_POST['company'] ?? '');
-    $password   = $_POST['password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
+    $last_name  = sanitize($_POST['last_name']  ?? '');
+    $email      = sanitize($_POST['email']      ?? '');
+    $student_id = sanitize($_POST['student_id'] ?? '');
+    $company    = sanitize($_POST['company']    ?? '');
+    $password   = $_POST['password']         ?? '';
+    $confirm    = $_POST['confirm_password'] ?? '';
 
-    // Form Validation
-    if (empty($first_name) || empty($last_name) || empty($email) || empty($password)) {
-        $error = 'Please fill out all required fields.';
-    } elseif (!str_ends_with($email, ALLOWED_DOMAIN)) {
-        $error = 'Only official university accounts (' . ALLOWED_DOMAIN . ') are allowed.';
-    } elseif ($password !== $confirm_password) {
-        $error = 'Passwords do not match.';
-    } elseif (strlen($password) < 8) {
-        $error = 'Password must be at least 8 characters long.';
-    } else {
-        $pdo = db();
+    $old = compact('first_name', 'last_name', 'email', 'student_id', 'company');
 
-        // Check if email already exists
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            $error = 'An account with this email already exists.';
-        } else {
-            // Hash password safely using standard PHP password hashing matching your verify function
-            $password_hash = password_hash($password, PASSWORD_BCRYPT);
-            
-            // Hardcode Role ID to '2' (Intern role from your roles table insert script)
-            $role_id = 2; 
-            // Standard dynamic default parameters for interns
-            $required_hours = 70; 
+    if (!$first_name)                              $errors[] = 'First name is required.';
+    if (!$last_name)                               $errors[] = 'Last name is required.';
+    if (!str_ends_with($email, ALLOWED_DOMAIN))    $errors[] = 'Only ' . ALLOWED_DOMAIN . ' emails are allowed.';
+    if (strlen($password) < 8)                     $errors[] = 'Password must be at least 8 characters.';
+    if ($password !== $confirm)                    $errors[] = 'Passwords do not match.';
 
-            try {
-                $stmt = $pdo->prepare("INSERT INTO users (role_id, student_id, first_name, last_name, email, password_hash, company, required_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                $inserted = $stmt->execute([
-                    $role_id,
-                    !empty($student_id) ? $student_id : null,
-                    $first_name,
-                    $last_name,
-                    $email,
-                    $password_hash,
-                    !empty($company) ? $company : null,
-                    $required_hours
-                ]);
+    if (empty($errors)) {
+        $chk = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+        $chk->execute([$email]);
+        if ($chk->fetchColumn())                   $errors[] = 'An account with this email already exists.';
+    }
 
-                if ($inserted) {
-                    $success = 'Registration successful! You can now sign in.';
-                } else {
-                    $error = 'Something went wrong during registration. Please try again.';
-                }
-            } catch (PDOException $e) {
-                $error = 'Database error: ' . $e->getMessage();
-            }
-        }
+    if (empty($errors)) {
+        $internRoleId = $pdo->query("SELECT id FROM roles WHERE name='Intern'")->fetchColumn();
+        $stmt = $pdo->prepare("
+            INSERT INTO users (role_id, student_id, first_name, last_name, email, password_hash, company, required_hours, is_verified)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 70, 1)
+        ");
+        $stmt->execute([
+            $internRoleId,
+            encryptField($student_id),
+            $first_name,
+            $last_name,
+            $email,
+            hashPassword($password),
+            $company,
+        ]);
+        $success = true;
+        $old = [];
     }
 }
 ?>
@@ -106,10 +88,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px 0;
+    padding: 32px 16px;
 }
 
-.login-wrap {
+.register-wrap {
     display: flex;
     width: 900px;
     max-width: 96vw;
@@ -120,9 +102,10 @@ body {
 }
 
 .login-panel {
-    flex: 1;
+    width: 300px;
+    flex-shrink: 0;
     background: var(--navy);
-    padding: 48px 40px;
+    padding: 48px 36px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -160,6 +143,7 @@ body {
     background: var(--accent);
     border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
 }
 
 .logo-mark svg { width: 20px; height: 20px; stroke: var(--navy); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -171,48 +155,74 @@ body {
     letter-spacing: .04em;
 }
 
-.panel-body { z-index: 1; margin-top: 60px; margin-bottom: 60px; }
+.panel-body { z-index: 1; }
+
 .panel-heading {
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 700;
     color: #fff;
     line-height: 1.2;
     margin-bottom: 12px;
 }
 
-.panel-sub { font-size: 14px; color: rgba(255,255,255,.55); line-height: 1.6; }
+.panel-sub { font-size: 13px; color: rgba(255,255,255,.55); line-height: 1.7; }
 
-.panel-dots {
-    display: flex;
-    gap: 8px;
+.panel-steps {
     z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.dot {
-    width: 7px; height: 7px;
+.step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.step-dot {
+    width: 22px; height: 22px;
     border-radius: 50%;
-    background: rgba(255,255,255,.2);
+    background: rgba(255,255,255,.12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255,255,255,.4);
+    flex-shrink: 0;
 }
 
-.dot.fill { background: var(--accent); }
+.step-dot.active {
+    background: var(--accent);
+    color: var(--navy);
+}
 
-.login-form-side {
-    width: 460px;
-    padding: 48px 40px;
+.step-label {
+    font-size: 12px;
+    color: rgba(255,255,255,.4);
+}
+
+.step-label.active { color: rgba(255,255,255,.9); }
+
+.form-side {
+    flex: 1;
+    padding: 44px 40px;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    overflow-y: auto;
 }
 
 .form-heading { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 .form-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
 
-.form-row {
-    display: flex;
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
 }
 
-.form-group { margin-bottom: 14px; flex: 1; }
+.form-group { margin-bottom: 14px; }
+.form-group.full { grid-column: 1 / -1; }
 
 label {
     display: block;
@@ -220,6 +230,13 @@ label {
     font-weight: 600;
     color: var(--text);
     margin-bottom: 6px;
+}
+
+.label-opt {
+    font-weight: 400;
+    color: var(--muted);
+    margin-left: 4px;
+    font-size: 12px;
 }
 
 input {
@@ -240,7 +257,23 @@ input:focus {
     box-shadow: 0 0 0 3px rgba(26,60,94,.07);
 }
 
-.btn-login {
+input.has-error { border-color: #dc3545; }
+
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 40px; }
+.pw-toggle {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    cursor: pointer; padding: 0;
+    color: var(--muted);
+    display: flex;
+}
+
+.pw-toggle svg { width: 16px; height: 16px; }
+
+.btn-submit {
     width: 100%;
     padding: 11px;
     background: var(--navy);
@@ -252,10 +285,10 @@ input:focus {
     font-family: 'DM Sans', sans-serif;
     cursor: pointer;
     transition: background .2s;
-    margin-top: 8px;
+    margin-top: 4px;
 }
 
-.btn-login:hover { background: var(--navy-mid); }
+.btn-submit:hover { background: var(--navy-mid); }
 
 .alert-err {
     background: #fce8e6;
@@ -267,43 +300,60 @@ input:focus {
     margin-bottom: 16px;
 }
 
-.alert-success {
+.alert-err ul { list-style: none; padding: 0; margin: 0; }
+.alert-err li + li { margin-top: 4px; }
+.alert-err li::before { content: '· '; font-weight: 700; }
+
+.alert-ok {
     background: #e6f4ea;
     color: #1e8e3e;
     border: 1px solid #b7dfbb;
     border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 14px 16px;
+    font-size: 14px;
     margin-bottom: 16px;
+    text-align: center;
 }
 
-.login-hint {
+.alert-ok strong { display: block; font-size: 15px; margin-bottom: 4px; }
+
+.signin-link {
+    text-align: center;
     font-size: 13px;
     color: var(--muted);
-    text-align: center;
-    margin-top: 16px;
+    margin-top: 14px;
 }
 
-.login-hint a {
-    color: var(--navy-mid);
-    text-decoration: none;
-    font-weight: 600;
+.signin-link a { color: var(--navy); font-weight: 600; text-decoration: none; }
+.signin-link a:hover { text-decoration: underline; }
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 14px;
+    color: var(--muted);
+    font-size: 12px;
 }
 
-.login-hint a:hover {
-    text-decoration: underline;
+.divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 720px) {
     .login-panel { display: none; }
-    .login-form-side { width: 100%; padding: 36px 24px; }
-    .login-wrap { border-radius: 12px; }
+    .form-side { padding: 36px 24px; }
+    .register-wrap { border-radius: 12px; }
+    .form-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
 <body>
 
-<div class="login-wrap">
+<div class="register-wrap">
     <div class="login-panel">
         <div class="panel-logo">
             <div class="logo-mark">
@@ -311,73 +361,114 @@ input:focus {
             </div>
             <span class="logo-text">EVSU-OC</span>
         </div>
+
         <div class="panel-body">
-            <h1 class="panel-heading">Create an<br>Intern Account</h1>
-            <p class="panel-sub">Register your details to gain access to your progress timeline, dashboard logs, and work hours management portal.</p>
+            <h1 class="panel-heading">Create your<br>account</h1>
+            <p class="panel-sub">Register with your EVSU email to start tracking your internship hours.</p>
         </div>
-        <div class="panel-dots">
-            <div class="dot"></div>
-            <div class="dot fill"></div>
-            <div class="dot"></div>
+
+        <div class="panel-steps">
+            <div class="step-item">
+                <div class="step-dot active">1</div>
+                <span class="step-label active">Fill in your details</span>
+            </div>
+            <div class="step-item">
+                <div class="step-dot">2</div>
+                <span class="step-label">Log in to your account</span>
+            </div>
+            <div class="step-item">
+                <div class="step-dot">3</div>
+                <span class="step-label">Start recording attendance</span>
+            </div>
         </div>
     </div>
 
-    <div class="login-form-side">
-        <h2 class="form-heading">Get Started</h2>
-        <p class="form-sub">Sign up using your verified credentials</p>
-
-        <?php if ($error): ?>
-            <div class="alert-err"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-
+    <div class="form-side">
         <?php if ($success): ?>
-            <div class="alert-success"><?= htmlspecialchars($success) ?></div>
+            <div class="alert-ok">
+                <strong>Account created!</strong>
+                You can now sign in with your EVSU email.
+            </div>
+            <p class="signin-link" style="margin-top:0">
+                <a href="<?= APP_URL ?>/index.php">← Go to login</a>
+            </p>
+
+        <?php else: ?>
+            <h2 class="form-heading">Get started</h2>
+            <p class="form-sub">All fields are required unless marked optional</p>
+
+            <?php if ($errors): ?>
+            <div class="alert-err">
+                <ul>
+                    <?php foreach ($errors as $e): ?>
+                    <li><?= htmlspecialchars($e) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
+            <form method="POST" novalidate>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" name="first_name" value="<?= htmlspecialchars($old['first_name'] ?? '') ?>" placeholder="Juan" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" name="last_name" value="<?= htmlspecialchars($old['last_name'] ?? '') ?>" placeholder="Dela Cruz" required>
+                    </div>
+                    <div class="form-group full">
+                        <label>EVSU Email</label>
+                        <input type="email" name="email" value="<?= htmlspecialchars($old['email'] ?? '') ?>" placeholder="you@evsu.edu.ph" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Student ID <span class="label-opt">optional</span></label>
+                        <input type="text" name="student_id" value="<?= htmlspecialchars($old['student_id'] ?? '') ?>" placeholder="e.g. 2021-00001">
+                    </div>
+                    <div class="form-group">
+                        <label>Company / OJT <span class="label-opt">optional</span></label>
+                        <input type="text" name="company" value="<?= htmlspecialchars($old['company'] ?? '') ?>" placeholder="Where you're deployed">
+                    </div>
+                </div>
+
+                <div class="divider">password</div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Password</label>
+                        <div class="pw-wrap">
+                            <input type="password" name="password" id="pw1" placeholder="Min. 8 characters" required>
+                            <button type="button" class="pw-toggle" onclick="togglePw('pw1',this)">
+                                <svg id="eye1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <div class="pw-wrap">
+                            <input type="password" name="confirm_password" id="pw2" placeholder="Re-enter password" required>
+                            <button type="button" class="pw-toggle" onclick="togglePw('pw2',this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">Create Account</button>
+            </form>
+
+            <p class="signin-link">Already have an account? <a href="<?= APP_URL ?>/index.php">Sign in</a></p>
         <?php endif; ?>
-
-        <form method="POST">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>First Name *</label>
-                    <input type="text" name="first_name" placeholder="John" value="<?= isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : '' ?>" required autofocus>
-                </div>
-                <div class="form-group">
-                    <label>Last Name *</label>
-                    <input type="text" name="last_name" placeholder="Doe" value="<?= isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : '' ?>" required>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Student ID</label>
-                    <input type="text" name="student_id" placeholder="202X-XXXXX" value="<?= isset($_POST['student_id']) ? htmlspecialchars($_POST['student_id']) : '' ?>">
-                </div>
-                <div class="form-group">
-                    <label>Company / Agency</label>
-                    <input type="text" name="company" placeholder="EVSU-OC IT Dept" value="<?= isset($_POST['company']) ? htmlspecialchars($_POST['company']) : '' ?>">
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Email Address *</label>
-                <input type="email" name="email" placeholder="username@evsu.edu.ph" value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>" required>
-            </div>
-
-            <div class="form-group">
-                <label>Password *</label>
-                <input type="password" name="password" placeholder="••••••••" required>
-            </div>
-
-            <div class="form-group">
-                <label>Confirm Password *</label>
-                <input type="password" name="confirm_password" placeholder="••••••••" required>
-            </div>
-
-            <button type="submit" class="btn-login">Register Account</button>
-        </form>
-
-        <p class="login-hint">Already have an account? <a href="index.php">Sign in here</a></p>
     </div>
 </div>
 
+<script>
+function togglePw(id, btn) {
+    const input = document.getElementById(id);
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    btn.querySelector('svg').style.opacity = isText ? '1' : '.4';
+}
+</script>
 </body>
 </html>

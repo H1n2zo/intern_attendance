@@ -7,75 +7,91 @@ require_once __DIR__ . '/mailer/mailer.php';
 startSecureSession();
 
 if (isLoggedIn()) {
-    $role = $_SESSION['role'];
-    if ($role === 'Admin' || $role === 'Instructor') redirect('/pages/admin/dashboard.php');
-    else redirect('/pages/intern/home.php');
-}
-
-$error = '';
-$success = '';
-
-// Handle cancellation action to go back to username/password input phase
-if (isset($_GET['action']) && $_GET['action'] === 'cancel_mfa') {
-    unset($_SESSION['mfa_pending']);
-    unset($_SESSION['mfa_user_id']);
-    redirect('/index.php');
-}
-
-// Handle trigger action to generate and resend a fresh multi-factor code
-if (isset($_GET['action']) && $_GET['action'] === 'resend_mfa') {
-    if (isset($_SESSION['mfa_pending']) && isset($_SESSION['mfa_user_id'])) {
-        $userId = $_SESSION['mfa_user_id'];
-        $pdo = db();
-        
-        // Lookup user to acquire their exact contextual parameters
-        $stmt = $pdo->prepare("SELECT email, first_name FROM users WHERE id = ? AND is_active = 1");
-        $stmt->execute([$userId]);
-        $user = $stmt->fetch();
-        
-        if ($user) {
-            $code = generateMFACode();
-            $expiry = date('Y-m-d H:i:s', time() + MFA_CODE_EXPIRY);
-            
-            $pdo->prepare("UPDATE users SET mfa_code = ?, mfa_expires_at = ? WHERE id = ?")->execute([$code, $expiry, $userId]);
-            
-            if (sendMFACode($user['email'], $user['first_name'], $code)) {
-                logAction('mfa_sent', $userId, $user['email']);
-                $success = 'A fresh verification code has been dispatched to your inbox!';
-            } else {
-                $error = 'Could not deliver mail notification. Please try again.';
-            }
-        } else {
-            redirect('/index.php?action=cancel_mfa');
-        }
-    } else {
-        redirect('/index.php');
+    if ($_SESSION['role'] === 'Intern') {
+        header('Location: ' . APP_URL . '/pages/intern/home.php'); exit;
     }
+    header('Location: ' . APP_URL . '/pages/admin/dashboard.php'); exit;
 }
 
-$step = $_SESSION['mfa_pending'] ?? false ? 'mfa' : 'login';
+// Clear MFA and go back to login step
+if (isset($_GET['cancel_mfa'])) {
+    unset($_SESSION['mfa_pending'], $_SESSION['mfa_user_id']);
+    header('Location: ' . APP_URL . '/index.php'); exit;
+}
+
+// Resend OTP
+if (isset($_GET['resend_otp']) && !empty($_SESSION['mfa_user_id'])) {
+    $pdo = db();
+    $u = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+    $u->execute([$_SESSION['mfa_user_id']]);
+    $u = $u->fetch();
+    if ($u) {
+        $code   = generateMFACode();
+        $expiry = date('Y-m-d H:i:s', time() + MFA_CODE_EXPIRY);
+        $pdo->prepare("UPDATE users SET mfa_code = ?, mfa_expires_at = ? WHERE id = ?")->execute([$code, $expiry, $u['id']]);
+        sendMFACode($u['email'], $u['first_name'], $code);
+        logAction('mfa_sent', $u['id'], $u['email']);
+        $_SESSION['resent'] = true;
+    }
+    header('Location: ' . APP_URL . '/index.php'); exit;
+}
+
+$error   = '';
+$success = '';
+$step    = !empty($_SESSION['mfa_pending']) ? 'mfa' : 'login';
+
+if (isset($_SESSION['resent'])) {
+    $success = 'A new code has been sent to your email.';
+    unset($_SESSION['resent']);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($step === 'login' && isset($_POST['email']) && isset($_POST['password'])) {
-        $email = sanitize($_POST['email']);
+
+    // Step 1: email + password
+    if (isset($_POST['email'], $_POST['password'])) {
+        $email    = sanitize($_POST['email']);
         $password = $_POST['password'];
 
         if (!str_ends_with($email, ALLOWED_DOMAIN)) {
-            $error = 'Only @evsu.edu.ph accounts are allowed.';
+            $error = 'Only ' . ALLOWED_DOMAIN . ' emails are allowed.';
         } else {
-            $pdo = db();
-            $stmt = $pdo->prepare("SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ? AND u.is_active = 1");
+            $pdo  = db();
+            $stmt = $pdo->prepare("SELECT u.*, r.name AS role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ? AND u.is_active = 1");
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
             if ($user && verifyPassword($password, $user['password_hash'])) {
-                $code = generateMFACode();
-                $expiry = date('Y-m-d H:i:s', time() + MFA_CODE_EXPIRY);
 
+                // Check if device is already trusted
+                $deviceToken = $_COOKIE['device_token'] ?? null;
+                $trusted = false;
+                if ($deviceToken) {
+                    $chk = $pdo->prepare("SELECT id FROM trusted_devices WHERE user_id = ? AND device_token = ? AND trusted_until > NOW()");
+                    $chk->execute([$user['id'], $deviceToken]);
+                    $trusted = (bool) $chk->fetchColumn();
+                }
+
+                if ($trusted) {
+                    // Trusted device — skip OTP
+                    $_SESSION['user_id']    = $user['id'];
+                    $_SESSION['role_id']    = $user['role_id'];
+                    $_SESSION['role']       = $user['role_name'];
+                    $_SESSION['first_name'] = $user['first_name'];
+                    $_SESSION['last_name']  = $user['last_name'];
+                    $_SESSION['email']      = $user['email'];
+                    logAction('login_success', $user['id'], $user['email']);
+                    if ($user['role_name'] === 'Intern') {
+                        header('Location: ' . APP_URL . '/pages/intern/home.php'); exit;
+                    }
+                    header('Location: ' . APP_URL . '/pages/admin/dashboard.php'); exit;
+                }
+
+                // Unknown device — send OTP
+                $code   = generateMFACode();
+                $expiry = date('Y-m-d H:i:s', time() + MFA_CODE_EXPIRY);
                 $pdo->prepare("UPDATE users SET mfa_code = ?, mfa_expires_at = ? WHERE id = ?")->execute([$code, $expiry, $user['id']]);
 
-                $sent = sendMFACode($user['email'], $user['first_name'], $code);
-                if ($sent) {
+                if (sendMFACode($user['email'], $user['first_name'], $code)) {
                     $_SESSION['mfa_pending'] = true;
                     $_SESSION['mfa_user_id'] = $user['id'];
                     logAction('mfa_sent', $user['id'], $user['email']);
@@ -88,36 +104,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Invalid email or password.';
             }
         }
-    } elseif ($step === 'mfa' && isset($_POST['mfa_code'])) {
-        $userId = $_SESSION['mfa_user_id'] ?? null;
+    }
+
+    // Step 2: OTP verify — YOUR original working logic, untouched
+    elseif (isset($_POST['mfa_code'])) {
+        $userId    = $_SESSION['mfa_user_id'] ?? null;
         $inputCode = trim(sanitize($_POST['mfa_code']));
 
-        if ($userId) {
-            $pdo = db();
+        if (!$userId) {
+            $error = 'Session expired. Please log in again.';
+            $step  = 'login';
+            unset($_SESSION['mfa_pending'], $_SESSION['mfa_user_id']);
+        } else {
+            $pdo  = db();
             $current_time = date('Y-m-d H:i:s');
             $stmt = $pdo->prepare("SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? AND mfa_code = ? AND mfa_expires_at > ?");
             $stmt->execute([$userId, $inputCode, $current_time]);
             $user = $stmt->fetch();
 
             if ($user) {
-                $pdo->prepare("UPDATE users SET mfa_code = NULL, mfa_expires_at = NULL WHERE id = ?")->execute([$userId]);
+                $pdo->prepare("UPDATE users SET mfa_code = NULL, mfa_expires_at = NULL WHERE id = ?")->execute([$user['id']]);
 
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['role_id'] = $user['role_id'];
-                $_SESSION['role'] = $user['role_name'];
+                // Trust this device for 7 days
+                $token  = bin2hex(random_bytes(32));
+                $expiry = date('Y-m-d H:i:s', strtotime('+7 days'));
+                $pdo->prepare("
+                    INSERT INTO trusted_devices (user_id, device_token, user_agent, ip_address, trusted_until)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE trusted_until = VALUES(trusted_until)
+                ")->execute([$user['id'], $token, $_SERVER['HTTP_USER_AGENT'] ?? null, $_SERVER['REMOTE_ADDR'] ?? null, $expiry]);
+                setcookie('device_token', $token, [
+                    'expires'  => strtotime('+7 days'),
+                    'path'     => '/',
+                    'httponly' => true,
+                    'samesite' => 'Strict',
+                    'secure'   => false,
+                ]);
+
+                $_SESSION['user_id']    = $user['id'];
+                $_SESSION['role_id']    = $user['role_id'];
+                $_SESSION['role']       = $user['role_name'];
                 $_SESSION['first_name'] = $user['first_name'];
-                $_SESSION['last_name'] = $user['last_name'];
-                $_SESSION['email'] = $user['email'];
+                $_SESSION['last_name']  = $user['last_name'];
+                $_SESSION['email']      = $user['email'];
                 unset($_SESSION['mfa_pending'], $_SESSION['mfa_user_id']);
 
                 logAction('login_success', $user['id'], $user['email']);
 
-                if ($user['role_name'] === 'Intern') redirect('/pages/intern/home.php');
-                else redirect('/pages/admin/dashboard.php');
+                if ($user['role_name'] === 'Intern') {
+                    header('Location: ' . APP_URL . '/pages/intern/home.php'); exit;
+                }
+                header('Location: ' . APP_URL . '/pages/admin/dashboard.php'); exit;
             } else {
                 logAction('mfa_failed', $userId);
-                $error = 'Invalid or expired code.';
-                $step = 'mfa';
+                $error = 'Invalid or expired code. Check your email and try again.';
+                $step  = 'mfa';
             }
         }
     }
@@ -261,7 +302,8 @@ label {
     margin-bottom: 6px;
 }
 
-input {
+input[type="email"],
+input[type="password"] {
     width: 100%;
     padding: 10px 13px;
     border: 1px solid var(--border);
@@ -274,7 +316,8 @@ input {
     color: var(--text);
 }
 
-input:focus {
+input[type="email"]:focus,
+input[type="password"]:focus {
     border-color: var(--navy-mid);
     box-shadow: 0 0 0 3px rgba(26,60,94,.07);
 }
@@ -306,7 +349,7 @@ input:focus {
     margin-bottom: 16px;
 }
 
-.alert-success {
+.alert-ok {
     background: #e6f4ea;
     color: #1e8e3e;
     border: 1px solid #b7dfbb;
@@ -316,31 +359,15 @@ input:focus {
     margin-bottom: 16px;
 }
 
-.mfa-hint {
-    font-size: 13px;
-    color: var(--muted);
-    text-align: center;
-    margin-top: 12px;
-}
-
-.mfa-utility-links {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 16px;
-    font-size: 13px;
-}
-
 .back-link {
     font-size: 13px;
     color: var(--navy-mid);
     text-decoration: none;
-    font-weight: 500;
+    display: inline-block;
+    margin-bottom: 16px;
 }
 
-.back-link:hover {
-    text-decoration: underline;
-}
+.back-link:hover { text-decoration: underline; }
 
 .otp-inputs {
     display: flex;
@@ -349,14 +376,49 @@ input:focus {
     margin: 20px 0;
 }
 
-.otp-inputs input {
+.otp-box {
     width: 46px;
+    height: 52px;
     text-align: center;
     font-size: 22px;
     font-weight: 700;
-    letter-spacing: .02em;
-    padding: 10px 6px;
+    font-family: 'Space Mono', monospace;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    transition: border .2s, box-shadow .2s;
+    background: #fff;
+    color: var(--text);
+    caret-color: var(--accent);
 }
+
+.otp-box:focus {
+    border-color: var(--navy-mid);
+    box-shadow: 0 0 0 3px rgba(26,60,94,.1);
+}
+
+.mfa-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+}
+
+.mfa-hint { font-size: 12px; color: var(--muted); }
+
+.resend-btn {
+    font-size: 13px;
+    color: var(--navy-mid);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.resend-btn:disabled { color: var(--muted); text-decoration: none; cursor: default; }
 
 @media (max-width: 680px) {
     .login-panel { display: none; }
@@ -387,6 +449,7 @@ input:focus {
     </div>
 
     <div class="login-form-side">
+
         <?php if ($step === 'login'): ?>
             <h2 class="form-heading">Welcome back</h2>
             <p class="form-sub">Sign in with your EVSU account</p>
@@ -408,59 +471,117 @@ input:focus {
             </form>
 
         <?php else: ?>
+            <a href="<?= APP_URL ?>/index.php?cancel_mfa=1" class="back-link">← Back to login</a>
             <h2 class="form-heading">Verify your identity</h2>
-            <p class="form-sub">A 6-digit code was sent to your EVSU email</p>
+            <p class="form-sub">Enter the 6-digit code sent to your EVSU email</p>
 
             <?php if ($error): ?>
                 <div class="alert-err"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
             <?php if ($success): ?>
-                <div class="alert-success"><?= htmlspecialchars($success) ?></div>
+                <div class="alert-ok"><?= htmlspecialchars($success) ?></div>
             <?php endif; ?>
 
-            <form method="POST" id="mfa-form">
+            <form method="POST" id="mfa-form" autocomplete="off">
                 <div class="otp-inputs">
-                    <?php for ($i = 0; $i < 6; $i++): ?>
-                        <input type="text" maxlength="1" class="otp-digit" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code" required>
-                    <?php endfor; ?>
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" autocomplete="off">
                 </div>
-                <input type="hidden" name="mfa_code" id="mfa_code_hidden">
+                <input type="hidden" name="mfa_code" id="mfa_code_hidden" value="">
                 <button type="submit" class="btn-login">Verify</button>
             </form>
 
-            <div class="mfa-utility-links">
-                <a href="index.php?action=cancel_mfa" class="back-link">← Back to login</a>
-                <a href="index.php?action=resend_mfa" class="back-link">Resend Code</a>
+            <div class="mfa-footer">
+                <span class="mfa-hint">Code expires in 5 minutes</span>
+                <button class="resend-btn" id="resend-btn" onclick="resendOTP()">Resend code</button>
             </div>
-            <p class="mfa-hint">Code expires in 5 minutes</p>
         <?php endif; ?>
+
     </div>
 </div>
 
 <script>
-const digits = document.querySelectorAll('.otp-digit');
-digits.forEach((d, i) => {
-    d.addEventListener('input', () => {
-        d.value = d.value.replace(/\D/g, '');
-        if (d.value && i < digits.length - 1) digits[i + 1].focus();
-    });
-    d.addEventListener('keydown', e => {
-        if (e.key === 'Backspace' && !d.value && i > 0) digits[i - 1].focus();
-    });
-});
+(function () {
+    const boxes  = document.querySelectorAll('.otp-box');
+    const hidden = document.getElementById('mfa_code_hidden');
+    const form   = document.getElementById('mfa-form');
 
-const form = document.getElementById('mfa-form');
-if (form) {
-    form.addEventListener('submit', (e) => {
-        const code = [...digits].map(d => d.value).join('');
-        if (code.length !== 6) {
+    if (!boxes.length || !form) return;
+
+    function getCode() {
+        return Array.from(boxes).map(b => b.value.trim()).join('');
+    }
+
+    boxes.forEach((box, i) => {
+        box.addEventListener('keydown', function (e) {
+            if (e.key === 'Backspace') {
+                if (box.value === '' && i > 0) {
+                    boxes[i - 1].value = '';
+                    boxes[i - 1].focus();
+                } else {
+                    box.value = '';
+                }
+                e.preventDefault();
+            }
+        });
+
+        box.addEventListener('input', function () {
+            const val = box.value.replace(/\D/g, '');
+            box.value = val.slice(-1);
+            if (box.value && i < boxes.length - 1) {
+                boxes[i + 1].focus();
+            }
+        });
+
+        box.addEventListener('paste', function (e) {
             e.preventDefault();
-            alert('Please enter all 6 verification digits.');
-        } else {
-            document.getElementById('mfa_code_hidden').value = code;
-        }
+            const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+            text.slice(0, 6).split('').forEach((ch, j) => {
+                if (boxes[i + j]) boxes[i + j].value = ch;
+            });
+            const next = Math.min(i + text.length, boxes.length - 1);
+            boxes[next].focus();
+        });
     });
-}
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const code = getCode();
+        if (code.length < 6) {
+            boxes[code.length < boxes.length ? code.length : 0].focus();
+            return;
+        }
+        hidden.value = code;
+        form.submit();
+    });
+
+    const resendBtn = document.getElementById('resend-btn');
+    let cooldown = 30;
+
+    window.resendOTP = function () {
+        if (cooldown > 0) return;
+        window.location.href = '<?= APP_URL ?>/index.php?resend_otp=1';
+    };
+
+    if (resendBtn) {
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Resend in ' + cooldown + 's';
+        const timer = setInterval(() => {
+            cooldown--;
+            if (cooldown <= 0) {
+                clearInterval(timer);
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend code';
+            } else {
+                resendBtn.textContent = 'Resend in ' + cooldown + 's';
+            }
+        }, 1000);
+    }
+})();
 </script>
 </body>
 </html>

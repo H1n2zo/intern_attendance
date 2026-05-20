@@ -21,4 +21,4 @@ define('MAIL_PORT', 587);
 define('MAIL_USER', 'hansmichael.gabor@evsu.edu.ph');
 define('MAIL_PASS', 'nmke mxws gcsh dmnk');
 define('MAIL_FROM', 'noreply@evsu.edu.ph');
-define('MAIL_FROM_NAME', 'EVSU-OC Intern Attendance');
+define('MAIL_FROM_NAME', 'EVSU-OC Attendance System');
