@@ -101,37 +101,7 @@ renderHead('Dashboard');
                     </table>
                 </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Recent Activity</span>
-                        <a href="<?= APP_URL ?>/pages/admin/logs.php" class="btn btn-ghost btn-sm"><i data-feather="arrow-right"></i> All Logs</a>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr><th>User</th><th>Action</th><th>Time</th></tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($recentLogs as $log): ?>
-                            <?php
-                                $actionMap = [
-                                    'login_success' => ['badge-green', 'Logged In'],
-                                    'login_failed' => ['badge-red', 'Failed Login'],
-                                    'logout' => ['badge-gray', 'Logged Out'],
-                                    'mfa_sent' => ['badge-blue', 'MFA Sent'],
-                                    'mfa_failed' => ['badge-amber', 'MFA Failed'],
-                                    'timeout' => ['badge-gray', 'Timeout'],
-                                ];
-                                [$cls, $label] = $actionMap[$log['action']] ?? ['badge-gray', $log['action']];
-                            ?>
-                            <tr>
-                                <td style="font-size:13px"><?= $log['first_name'] ? htmlspecialchars($log['first_name'] . ' ' . $log['last_name']) : htmlspecialchars($log['email'] ?? '—') ?></td>
-                                <td><span class="badge <?= $cls ?>"><?= $label ?></span></td>
-                                <td style="font-size:12px;color:var(--muted)"><?= date('h:i A', strtotime($log['logged_at'])) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
+                
             </div>
         </div>
     </div>
