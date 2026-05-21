@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Only ' . ALLOWED_DOMAIN . ' emails are allowed.';
         } else {
             $pdo  = db();
-            $stmt = $pdo->prepare("SELECT u.*, r.name AS role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ? AND u.is_active = 1");
+            $stmt = $pdo->prepare("SELECT u.*, r.name AS role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = :email AND u.is_active");
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 

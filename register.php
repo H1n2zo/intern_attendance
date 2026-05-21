@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $internRoleId = $pdo->query("SELECT id FROM roles WHERE name='Intern'")->fetchColumn();
         $stmt = $pdo->prepare("
             INSERT INTO users (role_id, student_id, first_name, last_name, email, password_hash, company, required_hours, is_verified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 70, 1)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 70, true)
         ");
         $stmt->execute([
             $internRoleId,
