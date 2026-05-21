@@ -364,7 +364,7 @@ input.has-error { border-color: #dc3545; }
 
         <div class="panel-body">
             <h1 class="panel-heading">Create your<br>account</h1>
-            <p class="panel-sub">Register with your EVSU email to start tracking your internship hours.</p>
+            <p class="panel-sub">Register with your email to start tracking your internship hours.</p>
         </div>
 
         <div class="panel-steps">
@@ -387,7 +387,7 @@ input.has-error { border-color: #dc3545; }
         <?php if ($success): ?>
             <div class="alert-ok">
                 <strong>Account created!</strong>
-                You can now sign in with your EVSU email.
+                You can now sign in with your email.
             </div>
             <p class="signin-link" style="margin-top:0">
                 <a href="<?= APP_URL ?>/index.php">← Go to login</a>
@@ -418,8 +418,8 @@ input.has-error { border-color: #dc3545; }
                         <input type="text" name="last_name" value="<?= htmlspecialchars($old['last_name'] ?? '') ?>" placeholder="Dela Cruz" required>
                     </div>
                     <div class="form-group full">
-                        <label>EVSU Email</label>
-                        <input type="email" name="email" value="<?= htmlspecialchars($old['email'] ?? '') ?>" placeholder="you@evsu.edu.ph" required>
+                        <label>Email</label>
+                        <input type="email" name="email" value="<?= htmlspecialchars($old['email'] ?? '') ?>" placeholder="you@gmail.com" required>
                     </div>
                     <div class="form-group">
                         <label>Student ID <span class="label-opt">optional</span></label>

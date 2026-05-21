@@ -452,7 +452,7 @@ input[type="password"]:focus {
 
         <?php if ($step === 'login'): ?>
             <h2 class="form-heading">Welcome back</h2>
-            <p class="form-sub">Sign in with your EVSU account</p>
+            <p class="form-sub">Sign in with your account</p>
 
             <?php if ($error): ?>
                 <div class="alert-err"><?= htmlspecialchars($error) ?></div>
@@ -461,7 +461,7 @@ input[type="password"]:focus {
             <form method="POST">
                 <div class="form-group">
                     <label>Email Address</label>
-                    <input type="email" name="email" placeholder="you@evsu.edu.ph" required autofocus>
+                    <input type="email" name="email" placeholder="you@gmail.com" required autofocus>
                 </div>
                 <div class="form-group">
                     <label>Password</label>
@@ -473,7 +473,7 @@ input[type="password"]:focus {
         <?php else: ?>
             <a href="<?= APP_URL ?>/index.php?cancel_mfa=1" class="back-link">← Back to login</a>
             <h2 class="form-heading">Verify your identity</h2>
-            <p class="form-sub">Enter the 6-digit code sent to your EVSU email</p>
+            <p class="form-sub">Enter the 6-digit code sent to your email</p>
 
             <?php if ($error): ?>
                 <div class="alert-err"><?= htmlspecialchars($error) ?></div>
