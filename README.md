@@ -32,40 +32,6 @@ evsu-attendance/
 └── vendor/                     # Composer dependencies (PHPMailer)
 ```
 
-## Setup
-
-### 1. Install dependencies
-```bash
-composer require phpmailer/phpmailer
-```
-
-### 2. Create database
-```bash
-mysql -u root -p < config/schema.sql
-```
-
-### 3. Configure
-Edit `config/config.php`:
-- Set `DB_USER`, `DB_PASS`
-- Set `MAIL_USER`, `MAIL_PASS` (Gmail app password)
-- Change `ENCRYPTION_KEY` and `JWT_SECRET` to strong random strings
-- Update `APP_URL` to match your server
-
-### 4. Create an admin user
-Run this SQL after setup:
-```sql
-INSERT INTO users (role_id, first_name, last_name, email, password_hash, is_verified)
-VALUES (1, 'Admin', 'User', 'admin@evsu.edu.ph', '$2y$12$...bcrypt_hash...', 1);
-```
-Or use `password_hash('yourpassword', PASSWORD_BCRYPT, ['cost'=>12])` in PHP.
-
-## Default Roles
-| Role       | Access |
-|------------|--------|
-| Admin      | Full system — including Roles & Modules management |
-| Instructor | Dashboard, Attendance, Reports, Logs (view only) |
-| Intern     | Own time-in/out page only |
-
 ## Security Notes
 - Only `@evsu.edu.ph` emails can register
 - Passwords hashed with bcrypt (cost 12)
