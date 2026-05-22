@@ -1,13 +1,14 @@
 <?php
 define('APP_NAME', 'EVSU-OC Internship Attendance');
-define('APP_URL', 'http://localhost/evsu-attendance');
+define('APP_URL', 'http://evsuintern.infinityfreeapp.com');
 define('ALLOWED_DOMAIN', '');
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'evsu_attendance');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_CHARSET', 'utf8mb4');
+define('DB_HOST', 'sql200.infinityfree.com'); 
+define('DB_PORT', '3306');
+define('DB_NAME', 'if0_41988594_evsu_attendance');       
+define('DB_USER', 'if0_41988594');            
+define('DB_PASS', 'Intern0908');
+define('DB_CHARSET', 'utf8');
 
 define('ENCRYPTION_KEY', 'CHANGE_THIS_TO_A_SECURE_32_CHAR_KEY');
 define('JWT_SECRET', 'CHANGE_THIS_JWT_SECRET_KEY');
