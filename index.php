@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'path'     => '/',
                     'httponly' => true,
                     'samesite' => 'Strict',
-                    'secure'   => false,
+                    'secure'   => true,
                 ]);
 
                 $_SESSION['user_id']    = $user['id'];

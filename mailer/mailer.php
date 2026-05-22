@@ -203,12 +203,29 @@ function buildInfoRow($label, $value) {
 function wrapEmailLayout($body) {
     return "
     <div style='font-family:Arial,sans-serif;max-width:500px;margin:auto;background:#f5f5f5;border-radius:12px;overflow:hidden'>
-        <div style='background:#0f2744;padding:20px 28px;display:flex;align-items:center;gap:12px'>
-            <div style='background:#e8a020;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center'>
-                <span style='color:#0f2744;font-size:16px;font-weight:700'>E</span>
-            </div>
-            <p style='color:#fff;margin:0;font-size:16px;font-weight:600'>EVSU-OC Attendance</p>
-        </div>
+        <table width='100%' cellpadding='0' cellspacing='0' border='0' style='background:#0f2744'>
+            <tr>
+                <td style='padding:20px 28px;vertical-align:middle'>
+                    <table cellpadding='0' cellspacing='0' border='0'>
+                        <tr>
+                            <td valign='middle'>
+                                <table cellpadding='0' cellspacing='0' border='0' style='display:inline-table'>
+                                    <tr>
+                                        <td width='32' height='32' align='center' valign='middle'
+                                            style='background:#e8a020;border-radius:7px;width:32px;height:32px'>
+                                            <span style='color:#0f2744;font-size:16px;font-weight:700;line-height:1'>🎓</span>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td valign='middle' style='padding-left:12px'>
+                                <p style='color:#fff;margin:0;font-size:16px;font-weight:600'>EVSU-OC Attendance</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
         <div style='padding:28px;background:#fff'>$body</div>
         <div style='background:#f5f5f5;padding:14px 28px;text-align:center'>
             <p style='color:#aaa;font-size:11px;margin:0'>Eastern Visayas State University — Ormoc Campus · Do not reply to this email</p>

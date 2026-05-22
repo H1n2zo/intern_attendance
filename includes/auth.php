@@ -7,7 +7,7 @@ function startSecureSession() {
         session_set_cookie_params([
             'lifetime' => SESSION_LIFETIME,
             'path' => '/',
-            'secure' => false,
+            'secure' => true,
             'httponly' => true,
             'samesite' => 'Strict'
         ]);

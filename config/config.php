@@ -1,6 +1,6 @@
 <?php
 define('APP_NAME', 'EVSU-OC Internship Attendance');
-define('APP_URL', 'http://evsuintern.infinityfreeapp.com');
+define('APP_URL', 'https://evsuintern.infinityfreeapp.com');
 define('ALLOWED_DOMAIN', '');
 
 define('DB_HOST', 'sql200.infinityfree.com'); 
