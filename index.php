@@ -425,6 +425,59 @@ input[type="password"]:focus {
     .login-form-side { width: 100%; padding: 36px 24px; }
     .login-wrap { border-radius: 12px; }
 }
+
+@media (max-width: 680px) {
+    .login-wrap {
+        flex-direction: column;
+        border-radius: 0;
+        min-height: 100vh;
+        box-shadow: none;
+    }
+
+    .login-panel {
+        display: flex;           /* keep it visible */
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 28px 24px 32px;
+        min-height: unset;
+    }
+
+    .panel-heading {
+        font-size: 18px;
+        margin-bottom: 6px;
+    }
+
+    .panel-sub {
+        font-size: 12px;
+    }
+
+    .panel-dots {
+        margin-top: 14px;
+    }
+
+    .login-panel::before {
+        width: 140px; height: 140px;
+        top: -40px; right: -40px;
+    }
+
+    .login-panel::after {
+        width: 90px; height: 90px;
+        bottom: -20px; left: -20px;
+    }
+
+    .login-form-side {
+        width: 100%;
+        padding: 24px 20px;
+        justify-content: flex-start;
+    }
+
+    .form-heading { font-size: 18px; }
+
+    .login-form-side,
+    body {
+        background: #fff;
+    }
+}
 </style>
 </head>
 <body>
