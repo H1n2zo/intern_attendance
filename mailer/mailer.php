@@ -45,6 +45,18 @@ function sendMFACode($toEmail, $toName, $code) {
     return sendMail($toEmail, $toName, 'Your EVSU-OC Verification Code', $body);
 }
 
+function sendPasswordResetCode($toEmail, $toName, $code) {
+    $body = "
+        <p style='color:#333;font-size:15px'>Hi <strong>$toName</strong>,</p>
+        <p style='color:#555;font-size:14px'>We received a request to reset your password. Use the code below — it expires in 5 minutes.</p>
+        <div style='background:#f0f4f8;border-radius:8px;padding:20px;text-align:center;margin:24px 0'>
+            <span style='font-size:36px;font-weight:700;letter-spacing:8px;color:#1a3c5e'>$code</span>
+        </div>
+        <p style='color:#555;font-size:14px'>Enter this code on the password reset page to continue.</p>
+        <p style='color:#999;font-size:12px'>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>";
+    return sendMail($toEmail, $toName, 'Reset Your EVSU-OC Password', $body);
+}
+
 function sendTimeInConfirmation($intern) {
     if (!getSetting('notify_intern_timein')) return;
     $name    = htmlspecialchars($intern['first_name'] . ' ' . $intern['last_name']);

@@ -40,9 +40,16 @@ $error   = '';
 $success = '';
 $step    = !empty($_SESSION['mfa_pending']) ? 'mfa' : 'login';
 
+// Flash from resend OTP
 if (isset($_SESSION['resent'])) {
     $success = 'A new code has been sent to your email.';
     unset($_SESSION['resent']);
+}
+
+// Flash from successful password reset
+if (isset($_SESSION['pw_reset_success'])) {
+    $success = 'Password reset successfully. You can now sign in with your new password.';
+    unset($_SESSION['pw_reset_success']);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -106,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Step 2: OTP verify — YOUR original working logic, untouched
+    // Step 2: OTP verify
     elseif (isset($_POST['mfa_code'])) {
         $userId    = $_SESSION['mfa_user_id'] ?? null;
         $inputCode = trim(sanitize($_POST['mfa_code']));
@@ -322,6 +329,23 @@ input[type="password"]:focus {
     box-shadow: 0 0 0 3px rgba(26,60,94,.07);
 }
 
+.forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -8px;
+    margin-bottom: 16px;
+}
+
+.forgot-link {
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color .15s;
+}
+
+.forgot-link:hover { color: var(--navy-mid); text-decoration: underline; }
+
 .btn-login {
     width: 100%;
     padding: 11px;
@@ -425,59 +449,6 @@ input[type="password"]:focus {
     .login-form-side { width: 100%; padding: 36px 24px; }
     .login-wrap { border-radius: 12px; }
 }
-
-@media (max-width: 680px) {
-    .login-wrap {
-        flex-direction: column;
-        border-radius: 0;
-        min-height: 100vh;
-        box-shadow: none;
-    }
-
-    .login-panel {
-        display: flex;           /* keep it visible */
-        flex-direction: column;
-        justify-content: flex-start;
-        padding: 28px 24px 32px;
-        min-height: unset;
-    }
-
-    .panel-heading {
-        font-size: 18px;
-        margin-bottom: 6px;
-    }
-
-    .panel-sub {
-        font-size: 12px;
-    }
-
-    .panel-dots {
-        margin-top: 14px;
-    }
-
-    .login-panel::before {
-        width: 140px; height: 140px;
-        top: -40px; right: -40px;
-    }
-
-    .login-panel::after {
-        width: 90px; height: 90px;
-        bottom: -20px; left: -20px;
-    }
-
-    .login-form-side {
-        width: 100%;
-        padding: 24px 20px;
-        justify-content: flex-start;
-    }
-
-    .form-heading { font-size: 18px; }
-
-    .login-form-side,
-    body {
-        background: #fff;
-    }
-}
 </style>
 </head>
 <body>
@@ -507,9 +478,8 @@ input[type="password"]:focus {
             <h2 class="form-heading">Welcome back</h2>
             <p class="form-sub">Sign in with your account</p>
 
-            <?php if ($error): ?>
-                <div class="alert-err"><?= htmlspecialchars($error) ?></div>
-            <?php endif; ?>
+            <?php if ($error):   ?><div class="alert-err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert-ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
 
             <form method="POST">
                 <div class="form-group">
@@ -520,6 +490,9 @@ input[type="password"]:focus {
                     <label>Password</label>
                     <input type="password" name="password" placeholder="••••••••" required>
                 </div>
+                <div class="forgot-row">
+                    <a href="<?= APP_URL ?>/forgot_password.php" class="forgot-link">Forgot password?</a>
+                </div>
                 <button type="submit" class="btn-login">Continue</button>
             </form>
 
@@ -528,12 +501,8 @@ input[type="password"]:focus {
             <h2 class="form-heading">Verify your identity</h2>
             <p class="form-sub">Enter the 6-digit code sent to your email</p>
 
-            <?php if ($error): ?>
-                <div class="alert-err"><?= htmlspecialchars($error) ?></div>
-            <?php endif; ?>
-            <?php if ($success): ?>
-                <div class="alert-ok"><?= htmlspecialchars($success) ?></div>
-            <?php endif; ?>
+            <?php if ($error):   ?><div class="alert-err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert-ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
 
             <form method="POST" id="mfa-form" autocomplete="off">
                 <div class="otp-inputs">
